@@ -2,8 +2,8 @@ import "server-only";
 import OpenAI from "openai";
 import type { Response as AzureResponse } from "openai/resources/responses/responses";
 import { DefaultAzureCredential } from "@azure/identity";
-import { azurePayload, jevPayload } from "@/lib/payloads";
-import { jevResponseSchema, validateAnswers } from "@/lib/validation";
+import { azurePayload, jevPayload, opportunityCandidates } from "@/lib/payloads";
+import { jevResponseSchema, validateAnswers, validateOpportunityMatch } from "@/lib/validation";
 import type { Result, RunEvent, RunInput, Timing, Usage } from "@/lib/types";
 import { azureConfig } from "./config";
 import { estimatedCost } from "./cost";
@@ -216,15 +216,20 @@ export async function executeProvider(input: RunInput, signal: AbortSignal, emit
     text = responseText(terminal);
     if (!text) throw new DemoError("EMPTY_RESPONSE", "GPT completed without any answer text.", 502);
     let answers;
+    let opportunityMatch;
     try {
       const envelope: unknown = JSON.parse(text);
-      if (!envelope || typeof envelope !== "object" || Object.keys(envelope).length !== 1 || !("answers" in envelope))
-        throw new Error("Invalid envelope");
-      answers = validateAnswers(envelope.answers, input.questions);
+      if (opportunityCandidates(input)) {
+        opportunityMatch = validateOpportunityMatch(envelope, input);
+      } else {
+        if (!envelope || typeof envelope !== "object" || Object.keys(envelope).length !== 1 || !("answers" in envelope))
+          throw new Error("Invalid envelope");
+        answers = validateAnswers(envelope.answers, input.questions);
+      }
     } catch {
       throw new DemoError(
         "INVALID_CONTRACT",
-        "GPT did not return the requested Jev answer format. Inspect raw JSON.",
+        "GPT did not return the requested answer format or a valid candidate ID. Inspect raw JSON.",
         502,
       );
     }
@@ -238,6 +243,7 @@ export async function executeProvider(input: RunInput, signal: AbortSignal, emit
       timing,
       text,
       answers,
+      opportunityMatch,
       model,
       usage,
       ...(usage

@@ -55,6 +55,7 @@ export type Result = {
   raw: unknown;
   text?: string;
   answers?: Answers;
+  opportunityMatch?: { opportunityId: string | null; opportunityName: string | null; confidence: "high" | "low" };
   timing: Timing | null;
   usage?: Usage;
   model?: string;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Answers, Input, Questions } from "./types";
+import { opportunityCandidates } from "./payloads";
 
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
 const description = z.string().min(1).max(1000);
@@ -19,8 +20,8 @@ const question = z.discriminatedUnion("type", [
       criteria: z
         .record(z.string().min(1).max(80), description.nullable())
         .refine(
-          (v) => Object.keys(v).length >= 2 && Object.keys(v).length <= 8,
-          "Choice needs 2-8 options in this demo.",
+          (v) => Object.keys(v).length >= 2 && Object.keys(v).length <= 255,
+          "Choice needs 2-255 options.",
         ),
     })
     .strict(),
@@ -87,6 +88,18 @@ export const jevResponseSchema = z
     usage: usageSchema,
   })
   .passthrough();
+
+export function validateOpportunityMatch(value: unknown, input: Input) {
+  const parsed = z.object({
+    opportunityId: z.string().nullable(),
+    confidence: z.enum(["high", "low"]),
+  }).strict().parse(value);
+  const candidates = opportunityCandidates(input);
+  if (!candidates) throw new Error("Opportunity matching requires one opportunity Choice question.");
+  const selected = candidates.find(candidate => candidate.id === parsed.opportunityId);
+  if (parsed.opportunityId !== null && !selected) throw new Error("Unknown opportunity ID.");
+  return { ...parsed, opportunityName: selected?.name ?? null };
+}
 
 function sameKeys(actual: string[], expected: string[]) {
   return actual.length === expected.length && expected.every((key) => actual.includes(key));

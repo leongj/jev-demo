@@ -1,11 +1,11 @@
-import { azurePayload, jevPayload } from "./payloads";
+import { azurePayload, jevPayload, opportunityCandidates } from "./payloads";
 import { emailExamples, scenarios } from "./scenarios";
 import type { Answers, Input, Provider, Question, Result } from "./types";
 
 const fixtureValues: Record<string, Record<string, string | number | number[]>> = {
   snag: {
     food_category: "snag",
-    vegetarian: 0.01,
+    is_restaurant: 0.01,
     messiness: [0.08, 0.27, 0.65],
   },
   fairy: {
@@ -13,15 +13,13 @@ const fixtureValues: Record<string, Record<string, string | number | number[]>> 
     contains_gluten: 0.99,
     party_fit: [0.01, 0.07, 0.92],
   },
-  jaffle: {
-    food_category: "jaffle",
-    sealed: 0.99,
-    portability: [0.02, 0.13, 0.85],
-  },
   support: {
     department: "technical",
     urgent: 0.97,
     severity: [0.01, 0.08, 0.91],
+  },
+  sales: {
+    opportunity: "FY27 - HDS - GitHub Copilot",
   },
 };
 function answer(q: Question, value: string | number | number[]) {
@@ -71,7 +69,16 @@ export function fixtureResult(scenarioId: string, input: Input, provider: Provid
   const answers: Answers = Object.fromEntries(
     Object.entries(input.questions).map(([id, q]) => [id, answer(q, values[id])]),
   );
-  const text = JSON.stringify({ answers }, null, 2);
+  const candidates = provider !== "jev" ? opportunityCandidates(input) : null;
+  const selected = candidates?.find(candidate => candidate.name === values.opportunity);
+  const opportunityMatch = candidates ? {
+    opportunityId: selected?.id ?? null,
+    opportunityName: selected?.name ?? null,
+    confidence: "high" as const,
+  } : undefined;
+  const text = JSON.stringify(opportunityMatch
+    ? { opportunityId: opportunityMatch.opportunityId, confidence: opportunityMatch.confidence }
+    : { answers }, null, 2);
   return {
     provider,
     source: "fixture",
@@ -103,7 +110,8 @@ export function fixtureResult(scenarioId: string, input: Input, provider: Provid
             },
           },
     text: provider === "jev" ? undefined : text,
-    answers,
+    answers: opportunityMatch ? undefined : answers,
+    opportunityMatch,
     model: "Authored fixture",
   };
 }

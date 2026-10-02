@@ -58,6 +58,28 @@ function responseOutput(raw: unknown): unknown {
   return undefined;
 }
 
+function responseOutputText(raw: unknown): string | undefined {
+  const output = responseOutput(raw);
+  if (!Array.isArray(output)) return undefined;
+  const texts = output.flatMap((item: unknown) => {
+    if (!item || typeof item !== "object" || !("content" in item) || !Array.isArray(item.content)) return [];
+    return item.content.flatMap((content: unknown) =>
+      content && typeof content === "object" && "text" in content && typeof content.text === "string"
+        ? [content.text] : []);
+  });
+  return texts.length ? texts.join("\n") : undefined;
+}
+
+function prettyJsonText(text: string): string {
+  try {
+    return print(JSON.parse(text));
+  } catch (error) {
+    // Keep partial streamed JSON visible until it can be parsed.
+    if (error instanceof SyntaxError) return text;
+    throw error;
+  }
+}
+
 function PrettyRequest({ request }: { request: unknown }) {
   if (!request || typeof request !== "object") return <pre className="pretty-text">—</pre>;
   const instructions = "instructions" in request && typeof request.instructions === "string" ? request.instructions : "";
@@ -93,9 +115,8 @@ function InputPayload({ request, title, azure = false, mode, setMode, modeDisabl
   </article>;
 }
 
-function Output({ lane, cancel, inputKey, model, run, runDisabled }: {
+function Output({ lane, cancel, inputKey, model }: {
   lane: Lane; cancel: () => void; inputKey: string; model: string;
-  run: () => void; runDisabled: boolean;
 }) {
   const azure = lane.provider !== "jev";
   const result = lane.result;
@@ -104,12 +125,10 @@ function Output({ lane, cancel, inputKey, model, run, runDisabled }: {
     minimumFractionDigits: 2, maximumFractionDigits: 20, useGrouping: false,
   })}`;
   const [view, setView] = useState<"pretty" | "output" | "json">("pretty");
-  const json = view === "output" ? responseOutput(result?.raw) : result?.raw;
+  const json = result?.raw;
   return <article className="provider-card" aria-label={azure ? "GPT results" : "Jev results"} aria-busy={lane.running}>
     <div className="provider-top"><div className="provider-title">
       <h3>{azure ? `${model} (no reasoning)` : "Jev"}</h3>
-      </div><div className="provider-actions">
-        <button className="primary" disabled={runDisabled} onClick={run}>{azure ? "Run GPT" : "Run Jev"}</button>
       </div>
     </div>
     {lane.error && <div className="error-box" role="alert">{lane.error}</div>}
@@ -126,7 +145,12 @@ function Output({ lane, cancel, inputKey, model, run, runDisabled }: {
         {lane.running && <div className="waiting-indicator" role="status" aria-label="Waiting for response">
           <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
         </div>}
-        {view !== "pretty" ? <JsonCode value={json} text={json == null ? lane.text || "—" : undefined} />
+        {view !== "pretty" ? <JsonCode value={json} text={view === "output" ? prettyJsonText(responseOutputText(json) ?? (lane.text || "—")) : json == null ? lane.text || "—" : undefined} />
+          : result?.opportunityMatch ? <div className="answers"><section className="answer">
+            <div className="outcome">{result.opportunityMatch.opportunityName ?? "No suitable match"}</div>
+            <div className="answer-foot"><span>Opportunity ID</span><b>{result.opportunityMatch.opportunityId ?? "null"}</b></div>
+            <div className="answer-foot"><span>Stated confidence</span><b>{result.opportunityMatch.confidence}</b></div>
+          </section></div>
           : result?.answers ? <Bars answers={result.answers} azure={azure} />
           : azure && lane.text ? <JsonCode text={lane.text} />
           : <pre className="pretty-text">{lane.text || (lane.running ? "…" : "—")}</pre>}
@@ -134,7 +158,7 @@ function Output({ lane, cancel, inputKey, model, run, runDisabled }: {
     </section>
     <div className="timing-block timing-grid">
       <div><div className="time-label">Server complete</div><div className="headline-time">{ms(lane.serverComplete ?? result?.timing?.providerCompleteMs)}</div></div>
-      <div><div className="time-label">First text</div><div className="headline-time">{ms(lane.ttft)}</div></div>
+      {azure && <div><div className="time-label">First token</div><div className="headline-time">{ms(lane.ttft)}</div></div>}
     </div>
     {result?.usage && <section className="timing-block timing-grid" aria-label="Cost and token usage">
       <div title={`Estimated USD for 1000 runs with the same token usage. ${result.costNote || ""}`}>
@@ -335,6 +359,9 @@ export default function DecisionLab() {
           <button disabled={locked} onClick={() => selectScenario(scenarioId)}>Reset</button>
         </header>
         <ScenarioPreview state={parsed.input?.state ?? scenarioState} questions={parsed.input?.questions ?? scenario.questions}
+          questionsControls={single && <select aria-label="Question" disabled={locked} value={singleId} onChange={event => selectQuestions(true, event.target.value)}>
+            {questionKeys.map(id => <option key={id}>{id}</option>)}
+          </select>}
           stateEditor={<details className="question-editor scenario-editor"><summary>State (Context) JSON</summary>
             {scenarioId === "email" && parsed.input && <EmailFields state={parsed.input.state} update={state => setStateText(print(state))} disabled={locked} />}
             {editor}
@@ -345,9 +372,6 @@ export default function DecisionLab() {
                 <button disabled={locked} aria-pressed={single} className={single ? "selected" : ""} onClick={() => selectQuestions(true)}>Single</button>
                 <button disabled={locked} aria-pressed={!single} className={!single ? "selected" : ""} onClick={() => selectQuestions(false)}>All</button>
               </div>
-                {single && <select aria-label="Question" disabled={locked} value={singleId} onChange={event => selectQuestions(true, event.target.value)}>
-                  {questionKeys.map(id => <option key={id}>{id}</option>)}
-                </select>}
                 <div className="question-list">{Object.entries(parsed.input?.questions || {}).map(([id, question]) =>
                   <div key={id}><span className="primitive">{question.type}</span><span>{id.replaceAll("_", " ")}</span></div>)}</div>
               </div>
@@ -372,15 +396,14 @@ export default function DecisionLab() {
           <InputPayload title="Jev" request={shownJevRequest} />
         </div>
         <div className="run-actions">
+          <button className="primary" disabled={lanes.azure.running || !parsed.input} onClick={() => void run([azureMode])}>Run GPT</button>
           <button className="primary" disabled={locked || !parsed.input} onClick={() => void run([azureMode, "jev"])}>Run both</button>
+          <button className="primary" disabled={lanes.jev.running || !parsed.input} onClick={() => void run(["jev"])}>Run Jev</button>
         </div>
         <div className="provider-grid"><Output lane={lanes.azure} cancel={() => cancel("azure")} inputKey={inputKey}
-          model={model}
-          run={() => void run([azureMode])} runDisabled={lanes.azure.running || !parsed.input}
-          />
+          model={model} />
           <Output lane={lanes.jev} cancel={() => cancel("jev")} inputKey={inputKey}
-            model={config?.jev.model || "jev-1.13.0"}
-            run={() => void run(["jev"])} runDisabled={lanes.jev.running || !parsed.input} /></div>
+            model={config?.jev.model || "jev-1.13.0"} /></div>
       </section>
     </div>
   </main>;

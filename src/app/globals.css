@@ -27,6 +27,8 @@ textarea { width: 100%; resize: vertical; border: 1px solid var(--line); border-
 .scenario-editor { padding: 12px 16px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .scenario-preview { padding: 24px; border: 1px solid var(--line); border-radius: 8px; background: #f5f5f5; }
 .scenario-preview > h3 { margin: 0 0 18px; font-size: 15px; }
+.scenario-questions-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 18px; }
+.scenario-questions-heading h3 { margin: 0; font-size: 15px; }
 .scenario-question-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 28px; }
 .scenario-question-text { margin: 0 0 16px; }
 .scenario-question dl > div + div { margin-top: 12px; }
@@ -116,7 +118,9 @@ textarea { width: 100%; resize: vertical; border: 1px solid var(--line); border-
 .email-editor label:nth-child(4) { grid-column: span 2; }
 .email-editor input, .email-editor textarea { width: 100%; font-size: 12px; }
 .email-editor textarea { min-height: 100px; }
-.run-actions { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+.run-actions { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); justify-items: center; align-items: center; margin-bottom: 14px; }
+.run-actions button { white-space: nowrap; }
+@media (max-width: 600px) { .run-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } }
 .primary { background: #111827; color: #fff; border-color: #111827; }
 .primary:hover { background: #374151; }
 .comparison-toolbar { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
