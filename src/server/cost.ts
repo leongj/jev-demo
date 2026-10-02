@@ -18,6 +18,7 @@ export function estimatedCost(provider: Provider, usage: Usage, model?: string) 
     const input = rate("JEV_INPUT_USD_PER_MILLION") ?? 0.042;
     return {
       estimatedUsd: (usage.input_tokens * input) / 1e6,
+      tokenPricing: { inputUsdPerMillion: input, outputUsdPerMillion: 0 },
       costNote: `Jev input assumption: USD ${input}/million; output free. Published Jev 1.13 price checked 2026-10-01; verify your account terms. Returned usage only.`,
     };
   }
@@ -26,13 +27,20 @@ export function estimatedCost(provider: Provider, usage: Usage, model?: string) 
   const output = rate("AZURE_OUTPUT_USD_PER_MILLION") ?? defaults?.output ?? null;
   const cached = rate("AZURE_CACHED_INPUT_USD_PER_MILLION") ?? defaults?.cachedInput ?? null;
   const cachedTokens = usage.cached_input_tokens ?? 0;
+  const tokenPricing = {
+    inputUsdPerMillion: input,
+    outputUsdPerMillion: output,
+    cachedInputUsdPerMillion: cached,
+  };
   if (input === null || output === null || (cachedTokens > 0 && cached === null))
     return {
       estimatedUsd: null,
+      tokenPricing,
       costNote:
         "Azure price unknown. Configure input/output (and cached-input when used) USD/million rates for this deployment. Reasoning is included in output usage.",
     };
   return {
+    tokenPricing,
     estimatedUsd:
       ((usage.input_tokens - cachedTokens) * input + cachedTokens * (cached ?? 0) + usage.output_tokens * output) / 1e6,
     costNote: `Returned usage at USD ${input} input / ${cached ?? "unknown"} cached input / ${output} output per million. GPT-6 Luna defaults: Azure Global Standard, short context, checked 2026-10-01; environment overrides take precedence. Excludes unreported cache-write surcharges, taxes and discounts.`,

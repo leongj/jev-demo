@@ -1,4 +1,4 @@
-# GPT Responses / Jev
+# Understanding Jev
 
 A local API demo: shared input, GPT streamed JSON (text generation or strict schema), and Jev typed probabilities.
 
@@ -7,13 +7,15 @@ npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:3000. The full-width input panel includes the scenario selector, always-visible question editor, and a collapsed Noul / Choice / Score explainer. Below it, both providers show their input payloads, scrollable responses, timings and usage. Responses API offers **Pretty output / Output JSON / Full JSON**; Output JSON shows only the native `output` array. Jev offers **Pretty output / JSON**. JSON is syntax-highlighted, including the editable state and questions. Scenario changes load labelled example responses for both providers without API calls.
+Open http://127.0.0.1:3000. Three sections organise the page: **What is Jev?**, **Scenario**, and **Live demo**. The introduction is a simple animated illustration of LLM next-token probabilities versus Jev typed-answer probabilities, with Noul / Choice / Score controls. Its numbers are illustrative, not API results or model internals. The selector sits beside the Scenario heading. Grey state/questions summaries are each followed by their collapsed JSON editor; the question-type guide stays collapsed below them. Valid edits update the readable summaries. Live demo contains side-by-side request payloads, responses, timings and cost/usage. GPT offers **Pretty output / Output JSON / Full JSON**; Output JSON shows only the native `output` array. Jev offers **Pretty output / JSON**. Scenario changes load labelled example responses without API calls.
 
 Use **Run GPT** or **Run Jev** in the respective card header, or the centred **Run both**, to replace examples with streamed live results. All run buttons call live providers; there is no fixture-mode selector or header configuration control. Usage is always visible when returned.
 
-Responses API input has **Pretty / JSON** views in the same fixed-height scroll pane. Pretty shows readable instructions and the decoded, highlighted input; JSON shows the full request body.
+The LLM illustration holds each candidate-token distribution for 600 ms, highlights and appends its selected token for 300 ms, then updates for the next step. **Pause / Play** and **Replay** control the presentation; reduced-motion preferences pause autoplay. Candidate scores are authored word-sized token illustrations, not live model log probabilities. Jev has two boxes: state/question/possible answers directly to typed output with probabilities. Choice and Score include confidence; Noul has no separate confidence field.
 
-The cost and usage row matches the timing row. Cost is estimated USD per 1000 runs at the current response's token usage; input/output counts are for that single run.
+GPT input has **Pretty / JSON** views in the same fixed-height scroll pane. Pretty shows readable instructions and the decoded, highlighted input; JSON shows the full request body.
+
+The cost and usage row matches the timing row. Cost is estimated USD per 1000 runs at the current response's token usage, displayed to three decimal places; input/output counts are for that single run. The actual input/output and applicable cached-input rates used in the calculation appear beneath the cost, in USD per million tokens, including any environment overrides.
 
 **Single** shows and sends the selected question only. **All** restores the full question set, retaining edits made to individual questions.
 
@@ -35,7 +37,7 @@ This worktree has non-secret Azure defaults in the ignored `.env`; `.env.local` 
 
 ## Contracts
 
-- GPT is called through Azure OpenAI `/openai/v1/responses` with `store:false`, `stream:true`, and `reasoning.effort:none`. The selector beside **Run GPT** offers **text** and **structured outputs**. Both request Jev's `answers` shape; text relies on instructions, while structured outputs also enforce a schema through `text.format`. Both validate the final answers. Provider API envelopes stay native. Generated confidence estimates are not evidence of calibration.
+- GPT is called through Azure OpenAI `/openai/v1/responses` with `store:false`, `stream:true`, and `reasoning.effort:none`. The selector in the GPT input card's header offers **text** and **structured outputs**. Both request Jev's `answers` shape; text relies on instructions, while structured outputs also enforce a schema through `text.format`. Both validate the final answers. Provider API envelopes stay native. Generated confidence estimates are not evidence of calibration.
 - Jev calls `https://api.typesafe.ai/v1/systemone`. Noul returns P(yes); Choice selects one option with its distribution/confidence; Score returns a weighted ordered level index with its distribution/confidence.
 - Live calls only happen when clicked. Fixtures are explicitly illustrative, never timed or benchmarked, and never substituted for failed live calls.
 

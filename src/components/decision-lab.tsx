@@ -9,6 +9,8 @@ import { parseInput, questionsSchema } from "@/lib/validation";
 import { type Answers, type ConfigStatus, type Input, type ObservedResult, type Provider, type State } from "@/lib/types";
 import JsonCode from "./json-code";
 import JsonEditor from "./json-editor";
+import ConceptDiagram from "./concept-diagram";
+import ScenarioPreview from "./scenario-preview";
 
 type Key = "azure" | "jev";
 type Lane = {
@@ -66,37 +68,50 @@ function PrettyRequest({ request }: { request: unknown }) {
   </div>;
 }
 
-function Output({ lane, cancel, inputKey, request, model, run, runDisabled, mode, setMode, modeDisabled }: {
-  lane: Lane; cancel: () => void; inputKey: string; request: unknown; model: string;
-  run: () => void; runDisabled: boolean;
+function InputPayload({ request, title, azure = false, mode, setMode, modeDisabled }: {
+  request: unknown; title: string; azure?: boolean;
   mode?: Provider; setMode?: (mode: Provider) => void; modeDisabled?: boolean;
 }) {
-  const azure = lane.provider !== "jev";
-  const result = lane.result;
-  const [inputView, setInputView] = useState<"pretty" | "json">("pretty");
-  const [view, setView] = useState<"pretty" | "output" | "json">("pretty");
-  const json = view === "output" ? responseOutput(result?.raw) : result?.raw;
-  return <article className="provider-card" aria-label={azure ? "GPT results" : "Jev results"} aria-busy={lane.running}>
-    <div className="provider-top"><div className="provider-title">
-      <h2>{azure ? `Responses API (${model})` : "Jev"}</h2>
-      </div><div className="provider-actions">
-        {azure && <select aria-label="GPT output" disabled={modeDisabled} value={mode} onChange={event => setMode?.(event.target.value as Provider)}>
+  const [view, setView] = useState<"pretty" | "json">("pretty");
+  return <article className="provider-card" aria-label={`${title} input`}>
+    <div className="provider-top"><h3>{title}</h3>
+      {azure && <div className="provider-actions">
+        <select aria-label="GPT output" disabled={modeDisabled} value={mode} onChange={event => setMode?.(event.target.value as Provider)}>
           <option value="azure-text">text</option><option value="azure-json">structured outputs</option>
-        </select>}
-        <button className="primary" disabled={runDisabled} onClick={run}>{azure ? "Run GPT" : "Run Jev"}</button>
-      </div>
+        </select>
+      </div>}
     </div>
     <section className="payload-section">
       <div className="payload-heading"><h3>Input payload</h3>
         {azure && <div className="mode-tabs" aria-label="GPT input view">
-          <button aria-pressed={inputView === "pretty"} className={inputView === "pretty" ? "selected" : ""} onClick={() => setInputView("pretty")}>Pretty</button>
-          <button aria-pressed={inputView === "json"} className={inputView === "json" ? "selected" : ""} onClick={() => setInputView("json")}>JSON</button>
+          <button aria-pressed={view === "pretty"} className={view === "pretty" ? "selected" : ""} onClick={() => setView("pretty")}>Pretty</button>
+          <button aria-pressed={view === "json"} className={view === "json" ? "selected" : ""} onClick={() => setView("json")}>JSON</button>
         </div>}
       </div>
-      <div className="input-content">
-        {azure && inputView === "pretty" ? <PrettyRequest request={request} /> : <JsonCode value={request} />}
-      </div>
+      <div className="input-content">{azure && view === "pretty" ? <PrettyRequest request={request} /> : <JsonCode value={request} />}</div>
     </section>
+  </article>;
+}
+
+function Output({ lane, cancel, inputKey, model, run, runDisabled }: {
+  lane: Lane; cancel: () => void; inputKey: string; model: string;
+  run: () => void; runDisabled: boolean;
+}) {
+  const azure = lane.provider !== "jev";
+  const result = lane.result;
+  const pricing = result?.tokenPricing;
+  const price = (value: number | null) => value === null ? "Unknown" : `$${value.toLocaleString("en-US", {
+    minimumFractionDigits: 2, maximumFractionDigits: 20, useGrouping: false,
+  })}`;
+  const [view, setView] = useState<"pretty" | "output" | "json">("pretty");
+  const json = view === "output" ? responseOutput(result?.raw) : result?.raw;
+  return <article className="provider-card" aria-label={azure ? "GPT results" : "Jev results"} aria-busy={lane.running}>
+    <div className="provider-top"><div className="provider-title">
+      <h3>{azure ? `${model} (no reasoning)` : "Jev"}</h3>
+      </div><div className="provider-actions">
+        <button className="primary" disabled={runDisabled} onClick={run}>{azure ? "Run GPT" : "Run Jev"}</button>
+      </div>
+    </div>
     {lane.error && <div className="error-box" role="alert">{lane.error}</div>}
     <section className="payload-section">
       <div className="payload-heading"><h3>{lane.source === "fixture" ? "Example response" : "Response payload"}{result && lane.inputKey !== inputKey ? " (previous input)" : ""}</h3>
@@ -124,7 +139,13 @@ function Output({ lane, cancel, inputKey, request, model, run, runDisabled, mode
     {result?.usage && <section className="timing-block timing-grid" aria-label="Cost and token usage">
       <div title={`Estimated USD for 1000 runs with the same token usage. ${result.costNote || ""}`}>
         <div className="time-label">Cost</div>
-        <div className="headline-time">{result.estimatedUsd == null ? "Unknown" : `$${(result.estimatedUsd * 1000).toFixed(2)} / 1000`}</div>
+        <div className="headline-time">{result.estimatedUsd == null ? "Unknown" : `$${(result.estimatedUsd * 1000).toFixed(3)} / 1000`}</div>
+        {pricing && <div className="token-pricing">
+          <div>Input {price(pricing.inputUsdPerMillion)} / Output {price(pricing.outputUsdPerMillion)}
+            {pricing.cachedInputUsdPerMillion !== undefined && <> / Cached {price(pricing.cachedInputUsdPerMillion)}</>}
+          </div>
+          <div>USD per 1M tokens</div>
+        </div>}
       </div>
       <div><div className="time-label">Input / Output tokens</div>
         <div className="headline-time">{result.usage.input_tokens} / {result.usage.output_tokens}</div>
@@ -286,61 +307,79 @@ export default function DecisionLab() {
   const azureRequest = parsed.input ? azurePayload(parsed.input, config?.azure.deployment || "YOUR-DEPLOYMENT", azureMode === "azure-json") : null;
   const jevRequest = parsed.input ? jevPayload(parsed.input, config?.jev.model || "jev-1.13.0") : null;
   const model = (config?.azure.model || "GPT").replace(/^gpt-/i, "GPT-").replace(/-luna$/, " Luna");
+  const scenario = scenarios.find(item => item.id === scenarioId)!;
+  const scenarioState = scenarioId === "email" && emailExample !== "" ? emailExamples[Number(emailExample)].state : scenario.state;
+  const shownAzureRequest = lanes.azure.source === "live" && lanes.azure.inputKey === inputKey && lanes.azure.request ? lanes.azure.request : azureRequest;
+  const shownJevRequest = lanes.jev.source === "live" && lanes.jev.inputKey === inputKey && lanes.jev.request ? lanes.jev.request : jevRequest;
   return <main>
-    <header className="site-header"><h1>Responses API / Jev</h1></header>
+    <header className="site-header"><h1>Understanding Jev</h1></header>
     {notice && <div className="notice" role="alert">{notice}</div>}
-    <div className="lab-grid">
-      <section className="input-card">
-        <div className="input-header">
-          <h2>Input</h2>
+    <div className="page-sections">
+      <section className="page-section" aria-labelledby="about-title">
+        <header className="section-heading"><h2 id="about-title">What is Jev?</h2></header>
+        <ConceptDiagram />
+      </section>
+      <section className="page-section" aria-labelledby="scenario-title">
+        <header className="section-heading">
+          <div className="scenario-heading">
+          <h2 id="scenario-title">Scenario</h2>
           <div className="control-bar">
             <select aria-label="Scenario" disabled={locked} value={scenarioId} onChange={e => selectScenario(e.target.value)}>
               {scenarios.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
             </select>
-            <button disabled={locked} onClick={() => selectScenario(scenarioId)}>Reset</button>
+            {scenarioId === "email" && <select aria-label="Email example" disabled={locked} value={emailExample} onChange={event => {
+              selectScenario("email", emailExamples[Number(event.target.value)].state);
+            }}><option value="" disabled>Example email</option>{emailExamples.map((item, index) => <option key={item.name} value={index}>{item.name}</option>)}</select>}
           </div>
-        </div>
-        <h3>State (Context)</h3>
-        {scenarioId === "email" ? <>
-          <select aria-label="Email example" disabled={locked} value={emailExample} onChange={e => {
-            selectScenario("email", emailExamples[Number(e.target.value)].state);
-          }}><option value="" disabled>Example email</option>{emailExamples.map((e, i) => <option key={e.name} value={i}>{e.name}</option>)}</select>
-          {parsed.input && <EmailFields state={parsed.input.state} update={state => setStateText(print(state))} disabled={locked} />}
-          <details className="question-editor"><summary>State JSON</summary>{editor}</details>
-        </> : editor}
-        <h3>Questions</h3>
-        <div className="question-selection"><div className="mode-tabs">
-          <button disabled={locked} aria-pressed={single} className={single ? "selected" : ""} onClick={() => selectQuestions(true)}>Single</button>
-          <button disabled={locked} aria-pressed={!single} className={!single ? "selected" : ""} onClick={() => selectQuestions(false)}>All</button>
-        </div>
-          {single && <select aria-label="Question" disabled={locked} value={singleId} onChange={e => selectQuestions(true, e.target.value)}>
-            {questionKeys.map(id => <option key={id}>{id}</option>)}
-          </select>}
-          <div className="question-list">{Object.entries(parsed.input?.questions || {}).map(([id, q]) =>
-            <div key={id}><span className="primitive">{q.type}</span><span>{id.replaceAll("_", " ")}</span></div>)}</div>
-        </div>
-        <div className="question-editor">
-          <JsonEditor label="Questions JSON" value={questionsText} disabled={locked} onChange={text => {
-            setQuestionsText(text);
-            if (!single) setAllQuestionsText(text);
-          }} />
-        </div>
-        <QuestionTypes />
+          </div>
+          <button disabled={locked} onClick={() => selectScenario(scenarioId)}>Reset</button>
+        </header>
+        <ScenarioPreview state={parsed.input?.state ?? scenarioState} questions={parsed.input?.questions ?? scenario.questions}
+          stateEditor={<details className="question-editor scenario-editor"><summary>State (Context) JSON</summary>
+            {scenarioId === "email" && parsed.input && <EmailFields state={parsed.input.state} update={state => setStateText(print(state))} disabled={locked} />}
+            {editor}
+          </details>}
+          questionsEditor={<>
+            <details className="question-editor scenario-editor"><summary>Questions JSON</summary>
+              <div className="question-selection"><div className="mode-tabs">
+                <button disabled={locked} aria-pressed={single} className={single ? "selected" : ""} onClick={() => selectQuestions(true)}>Single</button>
+                <button disabled={locked} aria-pressed={!single} className={!single ? "selected" : ""} onClick={() => selectQuestions(false)}>All</button>
+              </div>
+                {single && <select aria-label="Question" disabled={locked} value={singleId} onChange={event => selectQuestions(true, event.target.value)}>
+                  {questionKeys.map(id => <option key={id}>{id}</option>)}
+                </select>}
+                <div className="question-list">{Object.entries(parsed.input?.questions || {}).map(([id, question]) =>
+                  <div key={id}><span className="primitive">{question.type}</span><span>{id.replaceAll("_", " ")}</span></div>)}</div>
+              </div>
+              <JsonEditor label="Questions JSON" value={questionsText} disabled={locked} onChange={text => {
+                setQuestionsText(text);
+                if (!single) setAllQuestionsText(text);
+              }} />
+            </details>
+            <QuestionTypes />
+          </>}
+        />
         {parsed.error && <div className="error-box input-error" role="alert">{parsed.error}</div>}
       </section>
-      <section className="comparison">
+      <section className="page-section comparison" aria-labelledby="live-demo-title">
+        <header className="section-heading"><h2 id="live-demo-title">Live demo</h2></header>
+        <div className="provider-grid input-payloads">
+          <InputPayload title={`${model} (no reasoning)`} request={shownAzureRequest} azure
+            mode={azureMode} modeDisabled={locked} setMode={mode => {
+              setAzureMode(mode);
+              if (parsed.input) preview(parsed.input, scenarioId, mode);
+            }} />
+          <InputPayload title="Jev" request={shownJevRequest} />
+        </div>
         <div className="run-actions">
           <button className="primary" disabled={locked || !parsed.input} onClick={() => void run([azureMode, "jev"])}>Run both</button>
         </div>
         <div className="provider-grid"><Output lane={lanes.azure} cancel={() => cancel("azure")} inputKey={inputKey}
-          request={lanes.azure.source === "live" && lanes.azure.inputKey === inputKey && lanes.azure.request ? lanes.azure.request : azureRequest} model={model}
+          model={model}
           run={() => void run([azureMode])} runDisabled={lanes.azure.running || !parsed.input}
-          mode={azureMode} modeDisabled={locked} setMode={mode => {
-            setAzureMode(mode);
-            if (parsed.input) preview(parsed.input, scenarioId, mode);
-          }} />
+          />
           <Output lane={lanes.jev} cancel={() => cancel("jev")} inputKey={inputKey}
-            request={lanes.jev.source === "live" && lanes.jev.inputKey === inputKey && lanes.jev.request ? lanes.jev.request : jevRequest} model={config?.jev.model || "jev-1.13.0"}
+            model={config?.jev.model || "jev-1.13.0"}
             run={() => void run(["jev"])} runDisabled={lanes.jev.running || !parsed.input} /></div>
       </section>
     </div>

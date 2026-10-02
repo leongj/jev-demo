@@ -13,7 +13,7 @@ const credential = new DefaultAzureCredential();
 type Emit = (event: RunEvent) => void;
 function httpError(status: number): DemoError {
   const messages: Record<number, string> = {
-    400: "Provider rejected the request/model parameters. Verify this deployment supports Responses, reasoning.effort:none and strict structured output. No parameter was silently removed.",
+    400: "Provider rejected the request/model parameters. Verify this deployment supports the requested API, reasoning.effort:none and structured outputs. No parameter was silently removed.",
     401: "Provider authentication failed. Check the server key or Azure login.",
     403: "Provider access denied. Check Azure data-plane roles (Cognitive Services OpenAI User) or TypeSafe account permissions.",
     404: "Deployment, model or endpoint not found. Check server configuration.",
@@ -170,13 +170,13 @@ export async function executeProvider(input: RunInput, signal: AbortSignal, emit
         raw = event.response;
         throw new DemoError(
           event.type === "response.incomplete" ? "INCOMPLETE" : "FAILED",
-          "The Responses API emitted a terminal failure/incomplete response. Partial text is not a complete usable answer.",
+          "The GPT response failed or was incomplete. Partial text is not a complete usable answer.",
           502,
         );
       } else if (event.type === "error") {
         throw new DemoError(
           "STREAM_ERROR",
-          "The Responses API emitted a streaming error; partial text is not a complete response.",
+          "The GPT stream emitted an error; partial text is not a complete response.",
           502,
         );
       }
@@ -184,7 +184,7 @@ export async function executeProvider(input: RunInput, signal: AbortSignal, emit
     if (!terminal || !timing)
       throw new DemoError(
         "STREAM_TRUNCATED",
-        "The Responses API stream ended without response.completed. No successful completion time is recorded.",
+        "The GPT stream ended without response.completed. No successful completion time is recorded.",
         502,
       );
     model = terminal.model;

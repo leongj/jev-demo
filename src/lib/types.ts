@@ -59,6 +59,11 @@ export type Result = {
   usage?: Usage;
   model?: string;
   estimatedUsd?: number | null;
+  tokenPricing?: {
+    inputUsdPerMillion: number | null;
+    outputUsdPerMillion: number | null;
+    cachedInputUsdPerMillion?: number | null;
+  };
   costNote?: string;
   error?: { code: string; message: string };
 };
