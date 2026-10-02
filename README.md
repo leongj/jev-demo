@@ -1,27 +1,31 @@
 # Understanding Jev
 
-A local API demo: shared input, GPT streamed JSON (text generation or strict schema), and Jev typed probabilities.
+Simple demo app that
 
+### Explains difference between LLM and Jev
+<img width="997" height="762" alt="image" src="https://github.com/user-attachments/assets/be2a2f31-db3e-4795-8e49-e1a1f262060b" />
+
+### Supports a number of different scenarios and shows the underlying JSON
+<img width="1010" height="829" alt="image" src="https://github.com/user-attachments/assets/9a43483c-1b77-4109-a219-60ec75e9b8e0" />
+
+### Explains output types
+<img width="983" height="514" alt="image" src="https://github.com/user-attachments/assets/4165149e-2cdf-4ae8-a748-5e6d95292ca7" />
+
+### Runs a head-to-head live demo
+<img width="991" height="529" alt="image" src="https://github.com/user-attachments/assets/93f28761-a75e-4fdc-90da-11fa0263a23a" />
+
+### Compare the output in speed and cost
+<img width="983" height="747" alt="image" src="https://github.com/user-attachments/assets/a2524c70-cef5-48c5-89bd-a355b34fabd0" />
+
+## To run
 ```powershell
 npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:3000. Three sections organise the page: **What is Jev?**, **Scenario**, and **Live demo**. The introduction is a simple animated illustration of LLM next-token probabilities versus Jev typed-answer probabilities, with Noul / Choice / Score controls. Its numbers are illustrative, not API results or model internals. The selector sits beside the Scenario heading. Grey state/questions summaries are each followed by their collapsed JSON editor; the question-type guide stays collapsed below them. Valid edits update the readable summaries. Live demo contains side-by-side request payloads, responses, timings and cost/usage. GPT offers **Pretty output / Output JSON / Full JSON**; Output JSON shows only the decoded `output[].content[].text`, without the surrounding API envelope. Jev offers **Pretty output / JSON**. Scenario changes load labelled example responses without API calls.
-
-Use **Run GPT** or **Run Jev**, centred beneath their respective input columns, or **Run both** between them on the same row, to replace examples with streamed live results. All run buttons call live providers; there is no fixture-mode selector or header configuration control. Usage is always visible when returned.
-
-The LLM illustration holds each candidate-token distribution for 600 ms, highlights and appends its selected token for 300 ms, then updates for the next step. **Pause / Play** and **Replay** control the presentation; reduced-motion preferences pause autoplay. Candidate scores are authored word-sized token illustrations, not live model log probabilities. Jev has two boxes: state/question/possible answers directly to typed output with probabilities. Choice and Score include confidence; Noul has no separate confidence field.
-
-GPT input has **Pretty / JSON** views in the same fixed-height scroll pane. Pretty shows readable instructions and the decoded, highlighted input; JSON shows the full request body.
-
-The cost and usage row matches the timing row. Cost is estimated USD per 1000 runs at the current response's token usage, displayed to three decimal places; input/output counts are for that single run. The actual input/output and applicable cached-input rates used in the calculation appear beneath the cost, in USD per million tokens, including any environment overrides.
-
-**Single** shows and sends the selected question only. **All** restores the full question set, retaining edits made to individual questions.
-
-**Sales opportunity matching** uses a fictionalised inbound GitHub Copilot email and 28 fictionalised opportunity titles, plus **No suitable match**. Names, organisations, agency acronyms, contact details and project identifiers are replaced; product names remain accurate. Both providers use the same email and candidate names, without extra opportunity descriptions. GPT follows Frontier's simpler matching pattern: IDs/names in the prompt and only `opportunityId` (or null) plus high/low stated confidence in the output. Structured outputs enforces that smaller schema; text mode requests it through instructions. Returned IDs are checked against the supplied candidates. Jev retains its native Choice distribution/confidence. Both authored previews select **FY27 - HDS - GitHub Copilot**; these are not live model results. Choice validation supports 2–255 options; existing request-size limits still apply.
-
 ## Environment
+- Azure AI Foundry for GPT-6 or other LLM
+- Typesafe API for Jev
 
 Set credentials locally in `.env.local` (gitignored), then restart the server:
 
